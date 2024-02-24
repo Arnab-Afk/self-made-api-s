@@ -1,26 +1,37 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
-from io import BytesIO
 import pytesseract
+import io
 
 app = FastAPI()
+
+# CORS ALLOWED
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+def extract_text_from_image(image):
+    
+    image = image.convert("L")
+   
+    text = pytesseract.image_to_string(image)
+    return text
 
 @app.post("/extract_text")
 async def extract_text(file: UploadFile = File(...)):
     try:
-        # Read the image file
-        image = Image.open(BytesIO(await file.read()))
+       
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        extracted_text = extract_text_from_image(image)
 
-        # Perform OCR using Tesseract with custom configurations
-        custom_config = r'--oem 3 --psm 6'  # Adjust as needed
-        text = pytesseract.image_to_string(image, lang='eng', config=custom_config)
-
-        return JSONResponse(content={"text": text}, status_code=200)
+        return JSONResponse(content={"text": extracted_text}, status_code=200)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
